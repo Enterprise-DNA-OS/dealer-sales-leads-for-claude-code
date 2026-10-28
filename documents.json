@@ -1,11 +1,36 @@
 [
   {
-    "name": "example",
-    "title": "TODO(author): the first document this industry must produce",
-    "for_each": "select gen_random_uuid() as id, 'Example' as name",
+    "name": "test-drive-record",
+    "title": "Test drive record",
+    "for_each": "select td.id, c.full_name || ' ' || v.stock_no as name from test_drives td join contacts c on c.id = td.contact_id join vehicles v on v.id = td.vehicle_id order by td.out_at desc",
     "file": "name",
     "sections": [
-      { "title": "Details", "sql": "select 'replace me' as item, $1::text as record_id" }
+      { "title": "Driver", "layout": "record", "sql": "select c.full_name as driver, c.mobile, c.email, td.licence_no as licence_number, td.licence_expires_on as licence_expires, case when td.licence_sighted then 'Yes' else 'NO' end as licence_sighted_by_staff from test_drives td join contacts c on c.id = td.contact_id where td.id = $1" },
+      { "title": "Vehicle", "layout": "record", "sql": "select v.stock_no, v.rego, v.year, v.make, v.model, v.variant, td.odometer_out as odometer_out_km, td.odometer_back as odometer_back_km from test_drives td join vehicles v on v.id = td.vehicle_id where td.id = $1" },
+      { "title": "The drive", "layout": "record", "sql": "select to_char(td.out_at at time zone coalesce((select value from settings where key = 'timezone'), 'Pacific/Auckland'), 'DD Mon YYYY HH24:MI') as out_at, to_char(td.back_at at time zone coalesce((select value from settings where key = 'timezone'), 'Pacific/Auckland'), 'DD Mon YYYY HH24:MI') as back_at, s.full_name as staff_member, 'The driver holds a current licence for this class of vehicle, will obey the road rules, and is responsible for any traffic or parking offence during the drive.' as declaration, '______________________' as driver_signature from test_drives td left join staff s on s.id = td.staff_id where td.id = $1" }
+    ]
+  },
+  {
+    "name": "trade-in-offer",
+    "title": "Trade-in offer",
+    "for_each": "select a.id, a.code || ' ' || c.full_name as name from appraisals a join contacts c on c.id = a.contact_id where a.status = 'open' order by a.appraised_at desc",
+    "file": "name",
+    "sections": [
+      { "title": "For", "layout": "record", "sql": "select c.full_name as customer, c.mobile, c.email, a.code as offer_reference from appraisals a join contacts c on c.id = a.contact_id where a.id = $1" },
+      { "title": "Your vehicle", "layout": "record", "sql": "select a.year, a.make, a.model, a.rego, a.odometer_km, a.condition as condition_noted from appraisals a where a.id = $1" },
+      { "title": "Our offer", "layout": "record", "sql": "select a.offer_cents as trade_in_offer_cents, a.valid_until as offer_valid_until, 'The offer stands until the date above, subject to the vehicle being in the condition noted, and to a clear search of the Personal Property Securities Register. Any finance owing is paid out from the offer.' as conditions from appraisals a where a.id = $1" }
+    ]
+  },
+  {
+    "name": "deal-summary",
+    "title": "Vehicle sale summary",
+    "for_each": "select d.id, d.code || ' ' || c.full_name as name from deals d join contacts c on c.id = d.contact_id where d.status <> 'cancelled' order by d.written_on desc",
+    "file": "name",
+    "sections": [
+      { "title": "Buyer", "layout": "record", "sql": "select c.full_name as buyer, c.mobile, c.email, d.code as deal, d.written_on as agreed_on, s.full_name as salesperson from deals d join contacts c on c.id = d.contact_id left join staff s on s.id = d.salesperson_id where d.id = $1" },
+      { "title": "Vehicle", "layout": "record", "sql": "select v.stock_no, v.rego, v.vin, v.year, v.make, v.model, v.variant, v.odometer_km from deals d join vehicles v on v.id = d.vehicle_id where d.id = $1" },
+      { "title": "The money", "layout": "record", "sql": "select d.sale_price_cents as price_cents, d.trade_allowance_cents as trade_in_allowance_cents, d.payout_cents as finance_owing_on_trade_in_cents, d.deposit_cents as deposit_paid_cents, d.deposit_method as deposit_paid_by, (d.sale_price_cents - d.trade_allowance_cents + d.payout_cents - d.deposit_cents) as balance_to_pay_cents, d.balance_method as balance_paid_by, nullif(d.lender, '') as finance_company from deals d where d.id = $1" },
+      { "title": "Trade-in", "sql": "select a.code as appraisal, a.year, a.make, a.model, a.rego, a.ppsr_checked_on as ppsr_searched_on from deals d join appraisals a on a.id = d.appraisal_id where d.id = $1" }
     ]
   }
 ]

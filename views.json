@@ -1,13 +1,50 @@
 [
   {
-    "name": "week",
-    "title": "This week",
-    "subtitle": "Dealer Sales Leads for Claude Code: what needs attention, rendered by npm run view",
+    "name": "today",
+    "title": "The sales floor today",
+    "subtitle": "Who is waiting, who is booked in, and what has gone quiet. Rendered by npm run view",
     "sections": [
       {
-        "title": "Needs attention",
-        "note": "TODO(author): point this at the industry's attention view (overdue, stuck, quiet).",
-        "sql": "select 'replace me' as item, 'TODO(author)' as why"
+        "title": "Waiting for a first answer",
+        "note": "Every open lead nobody has called, texted or emailed back yet, oldest first.",
+        "sql": "select code as lead, contact as customer, source, site as yard, coalesce(salesperson, 'NOBODY') as with_salesperson, response_minutes as minutes_waiting from v_open_leads where first_response_at is null order by received_at"
+      },
+      {
+        "title": "Booked in, next seven days",
+        "sql": "select to_char(ap.starts_at at time zone coalesce((select value from settings where key = 'timezone'), 'Pacific/Auckland'), 'Dy DD Mon HH24:MI') as booked, replace(ap.kind, '_', ' ') as kind, l.code as lead, c.full_name as customer, c.mobile, s.full_name as with_salesperson from appointments ap join leads l on l.id = ap.lead_id join contacts c on c.id = l.contact_id left join staff s on s.id = ap.staff_id where ap.outcome is null and ap.starts_at >= now() - interval '2 hours' and ap.starts_at < now() + interval '7 days' order by ap.starts_at"
+      },
+      {
+        "title": "Follow-ups overdue",
+        "sql": "select code as lead, contact as customer, salesperson, next_action as promised, next_action_on as was_due from v_open_leads where next_action_on < biz_today() order by next_action_on"
+      },
+      {
+        "title": "Gone quiet",
+        "note": "Answered once, then no call, text, email or visit for a week or more.",
+        "sql": "select code as lead, contact as customer, salesperson, stage, days_quiet from v_open_leads where first_response_at is not null and days_quiet >= coalesce((select value::int from settings where key = 'quiet_days'), 7) order by days_quiet desc"
+      }
+    ]
+  },
+  {
+    "name": "sources",
+    "title": "Lead sources",
+    "subtitle": "What each source sent and what it turned into",
+    "sections": [
+      {
+        "title": "Every lead each source has sent",
+        "note": "Repeat enquiries from someone already being looked after are not counted twice.",
+        "columns": ["source", "leads", "responded", "appointments", "test_drives", "sold", "lost", "monthly_spend_cents"],
+        "sql": "select name as source, leads, responded, appointments, test_drives, sold, lost, monthly_spend_cents from v_source_funnel order by sold desc, leads desc"
+      }
+    ]
+  },
+  {
+    "name": "team",
+    "title": "The team",
+    "subtitle": "Load, speed to answer and results per person",
+    "sections": [
+      {
+        "title": "Each person on the floor",
+        "sql": "select full_name as name, replace(role, '_', ' ') as role, site as yard, open_leads, overdue, avg_response_minutes, sold, closed, case when away_until >= biz_today() then 'away until ' || away_until else '' end as away from v_team order by site, full_name"
       }
     ]
   }
